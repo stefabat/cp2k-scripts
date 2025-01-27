@@ -201,7 +201,8 @@ def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigm
     # Set special points as x-axis ticks
     flat_positions = [pos for positions in bz_positions.values() for pos in positions]
     flat_labels = [label for label, positions in bz_positions.items() for _ in positions]
-    ax_band.set_xticks(flat_positions, flat_labels)
+    ax_band.set_xticks(flat_positions)
+    ax_band.set_xticklabels(flat_labels)
 
     # for label, positions in bz_positions.items():
     #     for pos in positions:
