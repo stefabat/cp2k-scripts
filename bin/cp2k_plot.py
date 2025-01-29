@@ -107,8 +107,9 @@ def parse_dos_file(filename):
 
     energy = data[:, 0] * HARTREE_TO_EV  # Convert Hartree to eV
     density = data[:, 1]
+    population = data[:, 2]
 
-    return np.array(energy), np.array(density)
+    return np.array(energy), np.array(density), np.array(population)
 
 
 def calculate_k_distances(k_points):
@@ -176,7 +177,7 @@ def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigm
         fig, (ax_band, ax_dos) = plt.subplots(
             1, 2, gridspec_kw={'width_ratios': [3, 1]}, figsize=(fig_width, fig_height), dpi=dpi
         )
-        dos_energy, density = dos_data
+        dos_energy, density, _ = dos_data
         dos_energy -= E_fermi  # Align DOS energy to Fermi level
         density = apply_gaussian_smoothing(dos_energy, density, sigma)
     else:
@@ -238,7 +239,15 @@ def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigm
 def plot_tdos(dos_data, figsize=(10, 6), dpi=150, sigma=0.02, ewin=None):
     """Plots total DOS separately with energy on the x-axis."""
 
-    dos_energy, density = dos_data
+    dos_energy, density, population = dos_data
+    # Find the largest energy that has population different from zero
+    non_zero_population_indices = np.where(population != 0)[0]
+    if len(non_zero_population_indices) > 0:
+        E_fermi = dos_energy[non_zero_population_indices[-1]]
+        print(f"Fermi Energy: {E_fermi:.2f} eV")
+    else:
+        print("No non-zero population found in the DOS data.")
+    dos_energy -= E_fermi  # Align DOS energy to Fermi level
     density = apply_gaussian_smoothing(dos_energy, density, sigma)
 
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
@@ -267,7 +276,7 @@ def main():
     parser.add_argument("--dos", type=str, help="Path to the CP2K DOS file (project.dos)")
     parser.add_argument("--ewin", type=float, nargs=2, default=None, help="Energy window for plots (eV)")
     parser.add_argument("--figsize", type=float, nargs=2, default=[10, 6], help="Figure size in cm (width, height)")
-    parser.add_argument("--dpi", type=int, default=150, help="Figure resolution (DPI)")
+    parser.add_argument("--dpi", type=int, default=300, help="Figure resolution (DPI)")
     parser.add_argument("--sigma", type=float, default=0.005, help="Gaussian broadening parameter in Hartree")
 
     args = parser.parse_args()
