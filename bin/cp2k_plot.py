@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import argparse
 import sys
 import re
+import math
 import os
 from scipy.ndimage import gaussian_filter1d
 
@@ -21,20 +22,21 @@ def parse_bs_file(filename):
         filename (str): The path to the CP2K band structure file.
     Returns:
         tuple: A tuple containing the following elements:
-            - k_points (np.ndarray): An array of k-points with shape (num_k_points, 3)
-            - weights (np.ndarray): An array of weights corresponding to each k-point with shape (num_k_points,)
+            - k_points (np.ndarray): An array of k-points with shape (num_k_points, 3).
+            - weights (np.ndarray): An array of weights corresponding to each k-point with shape (num_k_points,).
             - band_energies (np.ndarray): A 2D array of band energies for each k-point with shape (num_k_points, num_bands).
             - occupations (np.ndarray): A 2D array of occupations for each k-point with shape (num_k_points, num_bands).
             - special_points (dict): A dictionary of special points with their labels as keys and k-point coordinates as values.
             - num_bands (int): The number of bands.
+
+        All the arrays have a leading dimension of 2 in case of spin-polarized calculations, e.g. k_points has a shape of (2, num_k_points, 3).
     """
 
     special_points = {}
-    k_points = []
-    weights  = []
-    band_energies = []
-    occupations = []
-    num_bands = 0
+    k_points = [[],[]]
+    weights  = [[],[]]
+    band_energies = [[],[]]
+    occupations = [[],[]]
 
     with open(filename, 'r') as file:
         lines = file.readlines()
@@ -46,7 +48,12 @@ def parse_bs_file(filename):
         for line in lines:
             if line.startswith("# Set"):
                 # Extract number of bands from header line
+                num_sp    = int(line.split()[3])
+                num_kps   = int(line.split()[-4])
                 num_bands = int(line.split()[-2])
+                # print(f"Number of special points: {num_sp}")
+                # print(f"Number of k-points: {num_kps}")
+                # print(f"Number of bands: {num_bands}")
             elif line.startswith("#  Special point"):
                 # Parse special points
                 parts = line.split()
@@ -62,12 +69,14 @@ def parse_bs_file(filename):
             elif line.startswith("#  Point"):
                 # store the energies of the previous k-point
                 if len(energies) == num_bands:
-                    k_points.append(current_k)
-                    weights.append(current_weight)
-                    band_energies.append(energies)
-                    occupations.append(occs)
+                    ispin = current_spin - 1
+                    k_points[ispin].append(current_k)
+                    weights[ispin].append(current_weight)
+                    band_energies[ispin].append(energies)
+                    occupations[ispin].append(occs)
                 # get the information of the current k-point
                 parts = line.split()
+                current_spin = int(parts[4][0])
                 current_k = np.array([float(parts[5]), float(parts[6]), float(parts[7])])
                 current_weight = float(parts[8])
                 energies = []
@@ -82,18 +91,35 @@ def parse_bs_file(filename):
 
         # Append the last k-point's data
         if len(energies) == num_bands:
-            k_points.append(current_k)
-            weights.append(current_weight)
-            band_energies.append(energies)
-            occupations.append(occs)
+            ispin = current_spin - 1
+            k_points[ispin].append(current_k)
+            weights[ispin].append(current_weight)
+            band_energies[ispin].append(energies)
+            occupations[ispin].append(occs)
+
+    # some sanity checks
+    # assert(len(special_points) == num_sp)
+    assert(len(k_points[0]) == num_kps)
 
     # Convert lists to numpy arrays
-    k_points = np.array(k_points)
-    weights = np.array(weights)
-    band_energies = np.array(band_energies)
-    occupations = np.array(occupations)
+    # Assume that the number of k-points is the same for both spins in case of spin-polarized calculations
+    num_spin = 1
+    if len(k_points[0]) == len(k_points[1]):
+        k_points = np.array(k_points)
+        weights = np.array(weights)
+        band_energies = np.array(band_energies)
+        occupations = np.array(occupations)
+        num_spin = 2
+    elif len(k_points[1]) == 0:
+        k_points = np.array(k_points[0])
+        weights = np.array(weights[0])
+        band_energies = np.array(band_energies[0])
+        occupations = np.array(occupations[0])
+    else:
+        print("Error: The number of k-points is different for the two spins.")
+        sys.exit(1)
 
-    return k_points, weights, band_energies, occupations, special_points, num_bands
+    return k_points, weights, band_energies, occupations, special_points, num_bands, num_spin
 
 
 
@@ -130,8 +156,10 @@ def apply_gaussian_smoothing(energy, density, sigma_hartree):
     return gaussian_filter1d(density, sigma=sigma_ev / (energy[1] - energy[0]))
 
 
+# band_energies and occupations are 2D arrays with shape (n_k_points, n_bands)
 def calculate_band_gap(band_energies, occupations):
     # Identify the valence and conduction bands based on occupations
+    # This assumes uniform occupation among k-points
     occupied_band_indices = np.any(occupations > 0.0, axis=0)
     valence_band_max = np.max(band_energies[:, occupied_band_indices], axis=1)
     conduction_band_min = np.min(band_energies[:, ~occupied_band_indices], axis=1)
@@ -148,25 +176,34 @@ def calculate_band_gap(band_energies, occupations):
     band_gap = cbm - vbm
     is_direct = vbm_k_index == cbm_k_index
 
-    return band_gap, is_direct, occupied_band_indices
+    return band_gap, vbm_k_index, cbm_k_index, np.sum(occupied_band_indices), np.sum(~occupied_band_indices)
 
 
 def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigma=0.005):
     """Plots band structure, and optionally adds a DOS plot on the right if dos_data is provided."""
 
-    k_points, _, band_energies, occupations, special_points, num_bands = bs_data
+    k_points, _, band_energies, occupations, special_points, num_bands, num_spin = bs_data
 
-    k_distances = calculate_k_distances(k_points)
-    E_fermi = get_fermi_energy(band_energies, occupations)
+    # Align band energies to the Fermi level of alpha spin
+    if num_spin == 2:
+        k_distances = calculate_k_distances(k_points[0])
+        E_fermi = get_fermi_energy(band_energies[0], occupations[0])
+    else:
+        k_distances = calculate_k_distances(k_points)
+        E_fermi = get_fermi_energy(band_energies, occupations)
+
     aligned_energies = band_energies - E_fermi
 
-    # Calculate band gap
-    band_gap, is_direct, occupied_band_indices = calculate_band_gap(aligned_energies, occupations)
-    gap_type = "Direct" if is_direct else "Indirect"
+    # Calculate band gap based on alpha
+    if num_spin == 2:
+        band_gap, vbm_kpt, cbm_kpt, n_val, n_con = calculate_band_gap(aligned_energies[0], occupations[0])
+    else:
+        band_gap, vbm_kpt, cbm_kpt, n_val, n_con = calculate_band_gap(aligned_energies, occupations)
+    gap_type = "Direct" if vbm_kpt == cbm_kpt else "Indirect"
     print("\n--- Band Structure Information ---")
     print(f"Total number of bands: {num_bands}")
-    print(f"Number of valence bands: {np.sum(occupied_band_indices)}")
-    print(f"Number of conduction bands: {num_bands - np.sum(occupied_band_indices)}")
+    print(f"Number of valence bands: {n_val}")
+    print(f"Number of conduction bands: {n_con}")
     print(f"Fermi Energy: {E_fermi:.2f} eV")
     print(f"Band Gap: {band_gap:.2f} eV ({gap_type})")
 
@@ -184,12 +221,22 @@ def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigm
         fig, ax_band = plt.subplots(figsize=(fig_width, fig_height), dpi=dpi)
         ax_dos = None
 
-    for band in range(aligned_energies.shape[1]):
-        ax_band.plot(k_distances, aligned_energies[:, band], color="black", lw=1.5)
+    if num_spin == 2:
+        for band in range(aligned_energies[0].shape[1]):
+            ax_band.plot(k_distances, aligned_energies[0, :, band], color="red", lw=2)
+            ax_band.plot(k_distances, aligned_energies[1, :, band], color="blue", lw=1.5)
+    else:
+        for band in range(aligned_energies.shape[1]):
+            ax_band.plot(k_distances, aligned_energies[:, band], color="black", lw=1.5)
+
+    if num_spin == 2:
+        _k_points = k_points[0]
+    else:
+        _k_points = k_points
 
     bz_positions = {
         (label if label == r"$\Gamma$" else label.upper()): [
-            k_distances[i] for i, kp in enumerate(k_points) if np.allclose(kp, coords)
+            k_distances[i] for i, kp in enumerate(_k_points) if np.allclose(kp, coords)
         ]
         for label, coords in special_points.items()
     }
@@ -217,6 +264,19 @@ def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigm
 
     if ewin:
         ax_band.set_ylim(ewin)
+
+    # Add circles at the VBM and CBM positions
+    vbm_k_distance = k_distances[vbm_kpt]
+    cbm_k_distance = k_distances[cbm_kpt]
+    if num_spin == 2:
+        vbm_energy = aligned_energies[0, vbm_kpt[0], n_val - 1]
+        cbm_energy = aligned_energies[0, cbm_kpt[0], n_val]
+    else:
+        vbm_energy = aligned_energies[vbm_kpt[0], n_val - 1]
+        cbm_energy = aligned_energies[cbm_kpt[0], n_val]
+
+    ax_band.scatter(vbm_k_distance, vbm_energy, color="green", s=100, edgecolor='black', zorder=5, label='VBM')
+    ax_band.scatter(cbm_k_distance, cbm_energy, color="purple", s=100, edgecolor='black', zorder=5, label='CBM')
 
     if ax_dos:
         ax_dos.fill_betweenx(dos_energy, 0, density, color="lightgray", alpha=0.8)
