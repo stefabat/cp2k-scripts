@@ -13,6 +13,8 @@ plt.rcParams["savefig.directory"] = os.getcwd()
 
 HARTREE_TO_EV = 27.211384  # Conversion factor from Hartree to eV
 
+MARGIN_EV = 0.1  # Margin for considering a band gap quasi-direct.
+
 
 def parse_bs_file(filename):
     """
@@ -130,7 +132,7 @@ def apply_gaussian_smoothing(energy, density, sigma_hartree):
     return gaussian_filter1d(density, sigma=sigma_ev / (energy[1] - energy[0]))
 
 
-def calculate_band_gap(band_energies, occupations):
+def calculate_band_gap(band_energies, occupations, k_points, calculate_direct=False):
     # Identify the valence and conduction bands based on occupations
     occupied_band_indices = np.any(occupations > 0.0, axis=0)
     valence_band_max = np.max(band_energies[:, occupied_band_indices], axis=1)
@@ -139,19 +141,34 @@ def calculate_band_gap(band_energies, occupations):
     # Find the global maximum of the valence band and minimum of the conduction band
     vbm = np.max(valence_band_max)  # Valence band maximum
     cbm = np.min(conduction_band_min)  # Conduction band minimum
-
-    # Find the k-point indices where VBM and CBM occur
-    vbm_k_index = np.unravel_index(np.argmax(valence_band_max), valence_band_max.shape)
-    cbm_k_index = np.unravel_index(np.argmin(conduction_band_min), conduction_band_min.shape)
-
-    # Calculate band gap and determine if it's direct or indirect
+    
+    # Calculate indirect band gap
     band_gap = cbm - vbm
-    is_direct = vbm_k_index == cbm_k_index
+    
+    if calculate_direct:
+        # Calculate direct band gap for each k-point and take the minimum
+        direct_gaps = conduction_band_min - valence_band_max
+        min_direct_gap_index = np.argmin(direct_gaps)
+        direct_gap_energy = direct_gaps[min_direct_gap_index]
+        min_direct_gap_k_point = k_points[min_direct_gap_index]
+        
+        # Determine band gap type based on direct and indirect gap comparison
+        if np.argmin(direct_gaps) == np.argmax(valence_band_max):
+            gap_type = "Direct"
+        elif direct_gap_energy - band_gap <= MARGIN_EV:
+            gap_type = "Quasi-Direct"
+        else:
+            gap_type = "Indirect"
+    else:
+        # Determine if the band gap is direct or indirect
+        gap_type = "Direct" if np.argmax(valence_band_max) == np.argmin(conduction_band_min) else "Indirect"
+        direct_gap_energy = None
+        min_direct_gap_k_point = None
+    
+    return band_gap, gap_type, occupied_band_indices, direct_gap_energy, min_direct_gap_k_point   
+    
 
-    return band_gap, is_direct, occupied_band_indices
-
-
-def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigma=0.005):
+def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigma=0.005, calculate_direct=False):
     """Plots band structure, and optionally adds a DOS plot on the right if dos_data is provided."""
 
     k_points, _, band_energies, occupations, special_points, num_bands = bs_data
@@ -161,15 +178,15 @@ def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigm
     aligned_energies = band_energies - E_fermi
 
     # Calculate band gap
-    band_gap, is_direct, occupied_band_indices = calculate_band_gap(aligned_energies, occupations)
-    gap_type = "Direct" if is_direct else "Indirect"
+    band_gap, gap_type, occupied_band_indices, direct_gap_energy, min_direct_gap_k_point = calculate_band_gap(aligned_energies, occupations, k_points, calculate_direct)
     print("\n--- Band Structure Information ---")
     print(f"Total number of bands: {num_bands}")
     print(f"Number of valence bands: {np.sum(occupied_band_indices)}")
     print(f"Number of conduction bands: {num_bands - np.sum(occupied_band_indices)}")
     print(f"Fermi Energy: {E_fermi:.2f} eV")
     print(f"Band Gap: {band_gap:.2f} eV ({gap_type})")
-
+    if calculate_direct:
+        print(f"Minimum direct band gap energy: {direct_gap_energy:.2f} eV")
 
     fig_width, fig_height = figsize
 
@@ -233,6 +250,21 @@ def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigm
         ax_dos.set_xlim(0, max_density * 1.1)
         ax_dos.set_ylim(ax_band.get_ylim())
 
+    if calculate_direct:
+        # Find the index of the k-point closest to the minimum direct band gap
+        min_direct_gap_k_index = np.argmin(np.linalg.norm(k_points - min_direct_gap_k_point, axis=1))
+
+        # Get the valence and conduction band energies at the k-point of minimum direct band gap
+        valence_band_energy = aligned_energies[min_direct_gap_k_index, occupied_band_indices][-1]
+        conduction_band_energy = aligned_energies[min_direct_gap_k_index, ~occupied_band_indices][0]
+      
+        # Mark the k-point where the minimum direct band gap occurs with crosses on both valence and conduction bands
+        ax_band.plot(k_distances[min_direct_gap_k_index], valence_band_energy, 'bx', markersize=10, markeredgewidth=2)
+        ax_band.plot(k_distances[min_direct_gap_k_index], conduction_band_energy, 'bx', markersize=10, markeredgewidth=2)
+        
+        # Mark the k-point where the minimum direct band gap occurs
+        ax_band.axvline(k_distances[min_direct_gap_k_index], color="blue", linestyle="--", linewidth=1)
+
     plt.show()
 
 
@@ -278,6 +310,7 @@ def main():
     parser.add_argument("--figsize", type=float, nargs=2, default=[10, 6], help="Figure size in cm (width, height)")
     parser.add_argument("--dpi", type=int, default=300, help="Figure resolution (DPI)")
     parser.add_argument("--sigma", type=float, default=0.005, help="Gaussian broadening parameter in Hartree")
+    parser.add_argument("--direct_bg", action="store_true", help="Calculate and plot the direct band gap")
 
     args = parser.parse_args()
 
@@ -285,7 +318,7 @@ def main():
     dos_data = parse_dos_file(args.dos) if args.dos else None
 
     if bs_data:
-        plot_bands(bs_data, dos_data, args.figsize, args.dpi, args.ewin, args.sigma)
+        plot_bands(bs_data, dos_data, args.figsize, args.dpi, args.ewin, args.sigma, args.direct_bg)
     elif dos_data:
         plot_tdos(dos_data, args.figsize, args.dpi, args.sigma, args.ewin)
     else:
