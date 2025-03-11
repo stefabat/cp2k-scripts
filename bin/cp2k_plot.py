@@ -199,19 +199,28 @@ def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigm
     # TODO: maybe it's just better to have bands energies in a list, which I can modify
     aligned_energies = tuple(map(lambda x: x - E_fermi, band_energies))
 
-    # Calculate band gap
-    # band_gap = []
-    # gap_kpts = []
-    # val_cond = []
+    # find spoecial points positions in k_distances
+    bz_positions = {
+        (label if label == r"$\Gamma$" else label.upper()): [
+            k_distances[i] for i, kp in enumerate(k_points) if np.allclose(kp, coords)
+        ]
+        for label, coords in special_points.items()
+    }
+
+    # needed when plotting both spins
+    bs_colors = ["blue", "red"]
+    E_vbm = []
+    E_cbm = []
+    k_vbm = []
+    k_cbm = []
 
     for ispin in range(n_spins):
-        band_gap, vbm_k, cbm_k, n_val, n_con = calculate_band_gap(aligned_energies[ispin], occupations[ispin])
+        band_gap, vbm_k_idx, cbm_k_idx, n_val, n_con = calculate_band_gap(aligned_energies[ispin], occupations[ispin])
         assert(n_val + n_con == n_bands)
-        # band_gap.append(bg)
-        # gap_kpts.append(gk)
-        # val_cond.append(vc)
+        k_vbm.append(vbm_k_idx)
+        k_cbm.append(cbm_k_idx)
 
-        gap_type = "Direct" if vbm_k == cbm_k else "Indirect"
+        gap_type = "Direct" if vbm_k_idx == cbm_k_idx else "Indirect"
         print(f"\n--- Band Structure Information for Spin {ispin+1} ---")
         print(f"Total number of bands: {n_bands}")
         print(f"Number of valence bands: {n_val}")
@@ -229,23 +238,22 @@ def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigm
             dos_energy -= E_fermi  # Align DOS energy to Fermi level
             density = apply_gaussian_smoothing(dos_energy, density, sigma)
         else:
+            # band structure plot for each spin
             fig, ax_band = plt.subplots(figsize=(fig_width, fig_height), dpi=dpi)
             ax_dos = None
+            # band structure plot for both spins combined
+            if n_spins == 2 and ispin == 0:
+                fig_tot, ax_band_tot = plt.subplots(figsize=(fig_width, fig_height), dpi=dpi)
 
-        # set title
+        # Set title
         ax_band.set_title(f"Band Structure (Spin {ispin+1})")
-
-        bz_positions = {
-            (label if label == r"$\Gamma$" else label.upper()): [
-                k_distances[i] for i, kp in enumerate(k_points) if np.allclose(kp, coords)
-            ]
-            for label, coords in special_points.items()
-        }
 
         # Plot each special point and add vertical lines at each occurrence
         for label, positions in bz_positions.items():
             for pos in positions:
                 ax_band.axvline(pos, color="gray", linestyle="-", linewidth=plt.gca().spines["bottom"].get_linewidth())
+                if ispin == 1:
+                    ax_band_tot.axvline(pos, color="gray", linestyle="-", linewidth=plt.gca().spines["bottom"].get_linewidth())
 
         # Set special points as x-axis ticks
         flat_positions = [pos for positions in bz_positions.values() for pos in positions]
@@ -259,24 +267,55 @@ def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigm
         # Set plot limits to remove padding at the beginning and end
         ax_band.set_xlim(k_distances.min(), k_distances.max())
 
-        # Plot band structure for each spin separately
-        for band in range(aligned_energies[ispin].shape[1]):
-            ax_band.plot(k_distances, aligned_energies[ispin][:, band], color="black", lw=1.5)
+        if ispin == 1:
+            ax_band_tot.set_xticks(flat_positions)
+            ax_band_tot.set_xticklabels(flat_labels)
 
-            # ax_band.plot(k_distances, aligned_energies[0, :, band], color="red", lw=2)
-            # ax_band.plot(k_distances, aligned_energies[1, :, band], color="blue", lw=1.5)
+            ax_band_tot.set_ylabel(r"$E - E_\text{F}$ [eV]")
+            # Draw a line at the Fermi energy
+            ax_band_tot.axhline(0, color="black", linestyle="--", linewidth=1)
+            # Set plot limits to remove padding at the beginning and end
+            ax_band_tot.set_xlim(k_distances.min(), k_distances.max())
+
+        # Actually plot band structure
+        for band in range(aligned_energies[ispin].shape[1]):
+            # for each spin separately
+            ax_band.plot(k_distances, aligned_energies[ispin][:, band], color="black", lw=1.5)
+            # for both spins combined
+            if n_spins == 2:
+                ax_band_tot.plot(k_distances, aligned_energies[ispin][:, band], color=bs_colors[ispin], lw=1.5)
 
         # Add circles at the VBM and CBM positions
-        vbm_k_distance = k_distances[vbm_k]
-        cbm_k_distance = k_distances[cbm_k]
-        E_vbm = aligned_energies[0][vbm_k, n_val - 1]
-        E_cbm = aligned_energies[0][cbm_k, n_val]
-        ax_band.scatter(vbm_k_distance, E_vbm, color="purple", s=20, zorder=5)
-        ax_band.scatter(cbm_k_distance, E_cbm, color="purple", s=20, zorder=5)
+        vbm_k_dist = k_distances[k_vbm[ispin]]
+        cbm_k_dist = k_distances[k_cbm[ispin]]
+        E_vbm.append(aligned_energies[ispin][k_vbm[ispin], n_val - 1])
+        E_cbm.append(aligned_energies[ispin][k_cbm[ispin], n_val])
+        ax_band.scatter(vbm_k_dist, E_vbm[ispin], color="purple", s=20, zorder=5)
+        ax_band.scatter(cbm_k_dist, E_cbm[ispin], color="purple", s=20, zorder=5)
+        if ispin == 1:
+            if E_vbm[0] > E_vbm[1]:
+                E_vbm_max = E_vbm[0]
+                vbm_k_dist_max = k_distances[k_vbm[0]]
+            else:
+                E_vbm_max = E_vbm[1]
+                vbm_k_dist_max = k_distances[k_vbm[1]]
+
+            if E_cbm[0] < E_cbm[1]:
+                E_cbm_min = E_cbm[0]
+                cbm_k_dist_min = k_distances[k_cbm[0]]
+            else:
+                E_cbm_min = E_cbm[1]
+                cbm_k_dist_min = k_distances[k_cbm[1]]
+
+            ax_band_tot.scatter(vbm_k_dist_max, E_vbm_max, color="purple", s=20, zorder=5)
+            ax_band_tot.scatter(cbm_k_dist_min, E_cbm_min, color="purple", s=20, zorder=5)
+            ax_band_tot.set_title("Band Structure (Spin 1 and 2)")
 
         # set limits if requested
         if ewin:
             ax_band.set_ylim(ewin)
+            if ispin == 1:
+                ax_band_tot.set_ylim(ewin)
 
         # TODO: fix for spin-polarized calculations
         if ax_dos:
@@ -294,7 +333,7 @@ def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigm
             ax_dos.set_xlim(0, max_density * 1.1)
             ax_dos.set_ylim(ax_band.get_ylim())
 
-        plt.show()
+    plt.show()
 
 
 def plot_tdos(dos_data, figsize=(10, 6), dpi=150, sigma=0.02, ewin=None):
