@@ -241,10 +241,12 @@ def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigm
             fig, (ax_band, ax_dos) = plt.subplots(
                 1, 2, gridspec_kw={'width_ratios': [3, 1]}, figsize=(fig_width, fig_height), dpi=dpi
             )
+            fig.subplots_adjust(wspace=0)
             if n_spins == 2 and ispin == 0:
                 fig_tot, (ax_band_tot, ax_dos_tot) = plt.subplots(
                     1, 2, gridspec_kw={'width_ratios': [3, 1]}, figsize=(fig_width, fig_height), dpi=dpi
                 )
+                fig_tot.subplots_adjust(wspace=0)
         else:
             # band structure plot for each spin
             fig, ax_band = plt.subplots(figsize=(fig_width, fig_height), dpi=dpi)
@@ -326,7 +328,7 @@ def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigm
             if ispin == 1:
                 ax_band_tot.set_ylim(ewin)
 
-        # TODO: fix for spin-polarized calculations
+        # plot DOS
         if ax_dos:
             density[ispin] = apply_gaussian_smoothing(dos_energy, density[ispin], sigma)
 
@@ -337,7 +339,6 @@ def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigm
             ax_dos.set_yticklabels([])
             ax_dos.set_xticks([])
             ax_dos.spines["left"].set_visible(False)
-            plt.subplots_adjust(wspace=0)
 
             # get the highest value of the density within the visible energy range
             max_density = np.max(density[ispin][(dos_energy >= ax_band.get_ylim()[0]) & (dos_energy <= ax_band.get_ylim()[1])])
@@ -352,12 +353,11 @@ def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigm
                 ax_dos_tot.set_yticklabels([])
                 ax_dos_tot.set_xticks([])
                 ax_dos_tot.spines["left"].set_visible(False)
-                plt.subplots_adjust(wspace=0)
 
                 # get the highest value of the density within the visible energy range
-                max_density = np.max(sum(density)[(dos_energy >= ax_band.get_ylim()[0]) & (dos_energy <= ax_band.get_ylim()[1])])
-                ax_dos.set_xlim(0, max_density * 1.1)
-                ax_dos.set_ylim(ax_band.get_ylim())
+                max_density = np.max(sum(density)[(dos_energy >= ax_band_tot.get_ylim()[0]) & (dos_energy <= ax_band_tot.get_ylim()[1])])
+                ax_dos_tot.set_xlim(0, max_density * 1.1)
+                ax_dos_tot.set_ylim(ax_band_tot.get_ylim())
 
     plt.show()
 
