@@ -361,7 +361,7 @@ def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigm
 
     plt.show()
 
-
+# TODO: fix for spin-polarized calculations
 def plot_tdos(dos_data, figsize=(10, 6), dpi=150, sigma=0.02, ewin=None):
     """Plots total DOS separately with energy on the x-axis."""
 
