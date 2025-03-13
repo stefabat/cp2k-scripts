@@ -121,8 +121,8 @@ def parse_bs_file(filename):
         band_energies = (np.array(band_energies[0]), np.array(band_energies[1]))
         occupations = (np.array(occupations[0]), np.array(occupations[1]))
     else:
-        band_energies = (np.array(band_energies[0]))
-        occupations = (np.array(occupations[0]))
+        band_energies = (np.array(band_energies[0]),)
+        occupations = (np.array(occupations[0]),)
 
     return k_points, weights, band_energies, occupations, special_points, n_bands, n_spins
 
@@ -137,10 +137,13 @@ def parse_dos_file(filename):
     data = np.loadtxt(filename, comments='#')
 
     energy = data[:, 0] * HARTREE_TO_EV  # Convert Hartree to eV
-    density = data[:, 1]
-    population = data[:, 2]
+    density = [data[:, 1]]
+    population = [data[:, 2]]
+    if data.shape[1] == 5:
+        density.append(data[:, 3])
+        population.append(data[:, 4])
 
-    return np.array(energy), np.array(density), np.array(population)
+    return energy, density, population
 
 
 def calculate_k_distances(k_points):
@@ -199,6 +202,10 @@ def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigm
     # TODO: maybe it's just better to have bands energies in a list, which I can modify
     aligned_energies = tuple(map(lambda x: x - E_fermi, band_energies))
 
+    if dos_data:
+        dos_energy, density, _ = dos_data
+        dos_energy -= E_fermi  # Align DOS energy to Fermi level
+
     # find spoecial points positions in k_distances
     bz_positions = {
         (label if label == r"$\Gamma$" else label.upper()): [
@@ -234,9 +241,10 @@ def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigm
             fig, (ax_band, ax_dos) = plt.subplots(
                 1, 2, gridspec_kw={'width_ratios': [3, 1]}, figsize=(fig_width, fig_height), dpi=dpi
             )
-            dos_energy, density, _ = dos_data
-            dos_energy -= E_fermi  # Align DOS energy to Fermi level
-            density = apply_gaussian_smoothing(dos_energy, density, sigma)
+            if n_spins == 2 and ispin == 0:
+                fig_tot, (ax_band_tot, ax_dos_tot) = plt.subplots(
+                    1, 2, gridspec_kw={'width_ratios': [3, 1]}, figsize=(fig_width, fig_height), dpi=dpi
+                )
         else:
             # band structure plot for each spin
             fig, ax_band = plt.subplots(figsize=(fig_width, fig_height), dpi=dpi)
@@ -244,6 +252,7 @@ def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigm
             # band structure plot for both spins combined
             if n_spins == 2 and ispin == 0:
                 fig_tot, ax_band_tot = plt.subplots(figsize=(fig_width, fig_height), dpi=dpi)
+                ax_dos_tot = None
 
         # Set title
         ax_band.set_title(f"Band Structure (Spin {ispin+1})")
@@ -319,8 +328,10 @@ def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigm
 
         # TODO: fix for spin-polarized calculations
         if ax_dos:
-            ax_dos.fill_betweenx(dos_energy, 0, density, color="lightgray", alpha=0.8)
-            ax_dos.plot(density, dos_energy, color="gray", lw=1.5)
+            density[ispin] = apply_gaussian_smoothing(dos_energy, density[ispin], sigma)
+
+            ax_dos.fill_betweenx(dos_energy, 0, density[ispin], color="lightgray", alpha=0.8)
+            ax_dos.plot(density[ispin], dos_energy, color="gray", lw=1.5)
 
             ax_dos.axvline(0, color="black", linestyle="-", linewidth=plt.gca().spines["bottom"].get_linewidth())
             ax_dos.set_yticklabels([])
@@ -329,9 +340,24 @@ def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigm
             plt.subplots_adjust(wspace=0)
 
             # get the highest value of the density within the visible energy range
-            max_density = np.max(density[(dos_energy >= ax_band.get_ylim()[0]) & (dos_energy <= ax_band.get_ylim()[1])])
+            max_density = np.max(density[ispin][(dos_energy >= ax_band.get_ylim()[0]) & (dos_energy <= ax_band.get_ylim()[1])])
             ax_dos.set_xlim(0, max_density * 1.1)
             ax_dos.set_ylim(ax_band.get_ylim())
+            # we need to do the total plot here
+            if ispin == 1:
+                ax_dos_tot.fill_betweenx(dos_energy, 0, sum(density), color="lightgray", alpha=0.8)
+                ax_dos_tot.plot(sum(density), dos_energy, color="gray", lw=1.5)
+
+                ax_dos_tot.axvline(0, color="black", linestyle="-", linewidth=plt.gca().spines["bottom"].get_linewidth())
+                ax_dos_tot.set_yticklabels([])
+                ax_dos_tot.set_xticks([])
+                ax_dos_tot.spines["left"].set_visible(False)
+                plt.subplots_adjust(wspace=0)
+
+                # get the highest value of the density within the visible energy range
+                max_density = np.max(sum(density)[(dos_energy >= ax_band.get_ylim()[0]) & (dos_energy <= ax_band.get_ylim()[1])])
+                ax_dos.set_xlim(0, max_density * 1.1)
+                ax_dos.set_ylim(ax_band.get_ylim())
 
     plt.show()
 
