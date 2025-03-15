@@ -367,19 +367,20 @@ def plot_tdos(dos_data, figsize=(10, 6), dpi=150, sigma=0.02, ewin=None):
 
     dos_energy, density, population = dos_data
     # Find the largest energy that has population different from zero
-    non_zero_population_indices = np.where(population != 0)[0]
+    non_zero_population_indices = np.where(sum(population) != 0)[0]
     if len(non_zero_population_indices) > 0:
         E_fermi = dos_energy[non_zero_population_indices[-1]]
         print(f"Fermi Energy: {E_fermi:.2f} eV")
     else:
         print("No non-zero population found in the DOS data.")
     dos_energy -= E_fermi  # Align DOS energy to Fermi level
-    density = apply_gaussian_smoothing(dos_energy, density, sigma)
+    for ispin in range(len(density)):
+        density[ispin] = apply_gaussian_smoothing(dos_energy, density[ispin], sigma)
 
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
 
-    ax.fill_between(dos_energy, 0, density, color="lightgray", alpha=0.8)
-    ax.plot(dos_energy, density, color="gray", lw=1.5)
+    ax.fill_between(dos_energy, 0, sum(density), color="lightgray", alpha=0.8)
+    ax.plot(dos_energy, sum(density), color="gray", lw=1.5)
 
     ax.set_xlabel("Energy (eV)")
     ax.set_ylabel("Density of States")
@@ -387,7 +388,8 @@ def plot_tdos(dos_data, figsize=(10, 6), dpi=150, sigma=0.02, ewin=None):
     if ewin:
         ax.set_xlim(ewin)
 
-    max_density = np.max(density[(dos_energy >= ewin[0]) & (dos_energy <= ewin[1])])
+    # max_density = np.max(sum(density)[(dos_energy >= ewin[0]) & (dos_energy <= ewin[1])])
+    max_density = np.max(sum(density)[(dos_energy >= ax.get_xlim()[0]) & (dos_energy <= ax.get_xlim()[1])])
     ax.set_ylim(0, max_density * 1.1)
 
     # set the grid only vertically
