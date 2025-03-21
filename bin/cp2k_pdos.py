@@ -139,7 +139,7 @@ def plot_pdos(filename_prefix, num_elements):
 def main():
     parser = argparse.ArgumentParser(description="Plot CP2K projected density of states (pDOS)")
     parser.add_argument("--filename-prefix", type=str, required=True,
-                        help="Prefix for PDOS files (e.g., 'COF-1_Zn_0GPa-ALPHA' for files like COF-1_Zn_0GPa-ALPHA_k1-1.pdos)")
+                        help="Prefix for PDOS files (e.g., 'COF-1-ALPHA' for files like COF-1-ALPHA_k1-1.pdos)")
     parser.add_argument("--num-elements", type=int, required=True,
                         help="Number of constituent elements in the system")
     args = parser.parse_args()
