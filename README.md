@@ -8,7 +8,7 @@ There is a simple command-line interface `cp2kparse`:
 
 ```console
 usage: cp2k_plot [-h] [--bs BS] [--dos DOS] [--ewin EWIN EWIN] [--figsize FIGSIZE FIGSIZE] [--dpi DPI]
-                 [--sigma SIGMA]
+                 [--sigma SIGMA] [--Fermi FERMI]
 
 Analyze CP2K band structure and DOS.
 
@@ -21,6 +21,7 @@ options:
                         Figure size in cm (width, height)
   --dpi DPI             Figure resolution (DPI)
   --sigma SIGMA         Gaussian broadening parameter in Hartree
+  --Fermi FERMI         Fixed Fermi energy (in eV). If not provided, it will be calculated from the band structure.
 ```
 
 Passing only the `.bs` will plot the band structure only, if both `.bs` and `.dos` are passed, the total density of states is plotted adjacently to the right of the band structure, and if only the `.dos` file is passed, the total density of states is plotted alone with the energy axis on the abscissa. Notice that in the case of `.dos` only, the Fermi energy is unknown, so the plot is not aligned.

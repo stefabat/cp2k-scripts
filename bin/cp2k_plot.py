@@ -191,13 +191,18 @@ def calculate_band_gap(band_energies, occupations):
     return band_gap, vbm_k_index, cbm_k_index, np.sum(occ_bands), np.sum(~occ_bands)
 
 
-def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigma=0.005):
+def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigma=0.005, fermi_energy=None):
     """Plots band structure, and optionally adds a DOS plot on the right if dos_data is provided."""
 
     k_points, _, band_energies, occupations, special_points, n_bands, n_spins = bs_data
 
     # Get the Fermi energy and align band energies to it
-    E_fermi = get_fermi_energy(band_energies, occupations)
+    if fermi_energy is None:
+        E_fermi = get_fermi_energy(band_energies, occupations)
+    else:
+        E_fermi = fermi_energy
+        print(fermi_energy)
+        
     k_distances = calculate_k_distances(k_points)
     # TODO: maybe it's just better to have bands energies in a list, which I can modify
     aligned_energies = tuple(map(lambda x: x - E_fermi, band_energies))
@@ -274,7 +279,7 @@ def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigm
 
         ax_band.set_ylabel(r"$E - E_\text{F}$ [eV]")
         # Draw a line at the Fermi energy
-        ax_band.axhline(0, color="black", linestyle="--", linewidth=1)
+        ax_band.axhline(0, color="black", linestyle="--", linewidth=0.6)
         # Set plot limits to remove padding at the beginning and end
         ax_band.set_xlim(k_distances.min(), k_distances.max())
 
@@ -284,25 +289,25 @@ def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigm
 
             ax_band_tot.set_ylabel(r"$E - E_\text{F}$ [eV]")
             # Draw a line at the Fermi energy
-            ax_band_tot.axhline(0, color="black", linestyle="--", linewidth=1)
+            ax_band_tot.axhline(0, color="black", linestyle="--", linewidth=0.6)
             # Set plot limits to remove padding at the beginning and end
             ax_band_tot.set_xlim(k_distances.min(), k_distances.max())
 
         # Actually plot band structure
         for band in range(aligned_energies[ispin].shape[1]):
             # for each spin separately
-            ax_band.plot(k_distances, aligned_energies[ispin][:, band], color="black", lw=1.5)
+            ax_band.plot(k_distances, aligned_energies[ispin][:, band], color="black", lw=1.0)
             # for both spins combined
             if n_spins == 2:
-                ax_band_tot.plot(k_distances, aligned_energies[ispin][:, band], color=bs_colors[ispin], lw=1.5)
+                ax_band_tot.plot(k_distances, aligned_energies[ispin][:, band], color=bs_colors[ispin], lw=1.0)
 
         # Add circles at the VBM and CBM positions
         vbm_k_dist = k_distances[k_vbm[ispin]]
         cbm_k_dist = k_distances[k_cbm[ispin]]
         E_vbm.append(aligned_energies[ispin][k_vbm[ispin], n_val - 1])
         E_cbm.append(aligned_energies[ispin][k_cbm[ispin], n_val])
-        ax_band.scatter(vbm_k_dist, E_vbm[ispin], color="purple", s=20, zorder=5)
-        ax_band.scatter(cbm_k_dist, E_cbm[ispin], color="purple", s=20, zorder=5)
+        ax_band.scatter(vbm_k_dist, E_vbm[ispin], color="green", s=20, zorder=5)
+        ax_band.scatter(cbm_k_dist, E_cbm[ispin], color="green", s=20, zorder=5)
         if ispin == 1:
             if E_vbm[0] > E_vbm[1]:
                 E_vbm_max = E_vbm[0]
@@ -318,8 +323,8 @@ def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigm
                 E_cbm_min = E_cbm[1]
                 cbm_k_dist_min = k_distances[k_cbm[1]]
 
-            ax_band_tot.scatter(vbm_k_dist_max, E_vbm_max, color="purple", s=20, zorder=5)
-            ax_band_tot.scatter(cbm_k_dist_min, E_cbm_min, color="purple", s=20, zorder=5)
+            ax_band_tot.scatter(vbm_k_dist_max, E_vbm_max, color="green", s=20, zorder=5)
+            ax_band_tot.scatter(cbm_k_dist_min, E_cbm_min, color="green", s=20, zorder=5)
             ax_band_tot.set_title("Band Structure (Spin 1 and 2)")
 
         # set limits if requested
@@ -333,7 +338,7 @@ def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigm
             density[ispin] = apply_gaussian_smoothing(dos_energy, density[ispin], sigma)
 
             ax_dos.fill_betweenx(dos_energy, 0, density[ispin], color="lightgray", alpha=0.8)
-            ax_dos.plot(density[ispin], dos_energy, color="gray", lw=1.5)
+            ax_dos.plot(density[ispin], dos_energy, color="gray", lw=1.0)
 
             ax_dos.axvline(0, color="black", linestyle="-", linewidth=plt.gca().spines["bottom"].get_linewidth())
             ax_dos.set_yticklabels([])
@@ -347,7 +352,7 @@ def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigm
             # we need to do the total plot here
             if ispin == 1:
                 ax_dos_tot.fill_betweenx(dos_energy, 0, sum(density), color="lightgray", alpha=0.8)
-                ax_dos_tot.plot(sum(density), dos_energy, color="gray", lw=1.5)
+                ax_dos_tot.plot(sum(density), dos_energy, color="gray", lw=1.0)
 
                 ax_dos_tot.axvline(0, color="black", linestyle="-", linewidth=plt.gca().spines["bottom"].get_linewidth())
                 ax_dos_tot.set_yticklabels([])
@@ -362,17 +367,25 @@ def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigm
     plt.show()
 
 # TODO: fix for spin-polarized calculations
-def plot_tdos(dos_data, figsize=(10, 6), dpi=150, sigma=0.02, ewin=None):
+def plot_tdos(dos_data, figsize=(10, 6), dpi=150, sigma=0.02, ewin=None, fermi_energy=None):
     """Plots total DOS separately with energy on the x-axis."""
 
     dos_energy, density, population = dos_data
+    
     # Find the largest energy that has population different from zero
-    non_zero_population_indices = np.where(sum(population) != 0)[0]
-    if len(non_zero_population_indices) > 0:
-        E_fermi = dos_energy[non_zero_population_indices[-1]]
-        print(f"Fermi Energy: {E_fermi:.2f} eV")
+    # Determine Fermi energy
+    if fermi_energy is None:
+        non_zero_population_indices = np.where(sum(population) != 0)[0]
+        if len(non_zero_population_indices) > 0:
+            E_fermi = dos_energy[non_zero_population_indices[-1]]
+            print(f"Fermi Energy: {E_fermi:.2f} eV")
+        else:
+            print("No non-zero population found in the DOS data.")
+            E_fermi = 0.0 # set to zero so that we don't crash
     else:
-        print("No non-zero population found in the DOS data.")
+        E_fermi = fermi_energy
+        print(f"User-provided Fermi Energy: {E_fermi:.2f} eV")
+
     dos_energy -= E_fermi  # Align DOS energy to Fermi level
     for ispin in range(len(density)):
         density[ispin] = apply_gaussian_smoothing(dos_energy, density[ispin], sigma)
@@ -406,6 +419,7 @@ def main():
     parser.add_argument("--figsize", type=float, nargs=2, default=[10, 6], help="Figure size in cm (width, height)")
     parser.add_argument("--dpi", type=int, default=300, help="Figure resolution (DPI)")
     parser.add_argument("--sigma", type=float, default=0.005, help="Gaussian broadening parameter in Hartree")
+    parser.add_argument("--Fermi", type=float, default=None, help="Fixed Fermi energy (in eV). If not provided, it will be calculated from the band structure.")
 
     args = parser.parse_args()
 
@@ -413,9 +427,9 @@ def main():
     dos_data = parse_dos_file(args.dos) if args.dos else None
 
     if bs_data:
-        plot_bands(bs_data, dos_data, args.figsize, args.dpi, args.ewin, args.sigma)
+        plot_bands(bs_data, dos_data, args.figsize, args.dpi, args.ewin, args.sigma, fermi_energy=args.Fermi)
     elif dos_data:
-        plot_tdos(dos_data, args.figsize, args.dpi, args.sigma, args.ewin)
+        plot_tdos(dos_data, args.figsize, args.dpi, args.sigma, args.ewin, fermi_energy=args.Fermi)
     else:
         parser.print_help()
 
