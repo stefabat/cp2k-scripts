@@ -295,10 +295,10 @@ def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigm
         # Actually plot band structure
         for band in range(aligned_energies[ispin].shape[1]):
             # for each spin separately
-            ax_band.plot(k_distances, aligned_energies[ispin][:, band], color="black", lw=1.0)
+            ax_band.plot(k_distances, aligned_energies[ispin][:, band], color="black", lw=1.5)
             # for both spins combined
             if n_spins == 2:
-                ax_band_tot.plot(k_distances, aligned_energies[ispin][:, band], color=bs_colors[ispin], lw=1.0)
+                ax_band_tot.plot(k_distances, aligned_energies[ispin][:, band], color=bs_colors[ispin], lw=1.5)
 
         # Add circles at the VBM and CBM positions
         vbm_k_dist = k_distances[k_vbm[ispin]]
@@ -337,7 +337,7 @@ def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigm
             density[ispin] = apply_gaussian_smoothing(dos_energy, density[ispin], sigma)
 
             ax_dos.fill_betweenx(dos_energy, 0, density[ispin], color="lightgray", alpha=0.8)
-            ax_dos.plot(density[ispin], dos_energy, color="gray", lw=1.0)
+            ax_dos.plot(density[ispin], dos_energy, color="gray", lw=1.5)
 
             ax_dos.axvline(0, color="black", linestyle="-", linewidth=plt.gca().spines["bottom"].get_linewidth())
             ax_dos.set_yticklabels([])
@@ -351,7 +351,7 @@ def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigm
             # we need to do the total plot here
             if ispin == 1:
                 ax_dos_tot.fill_betweenx(dos_energy, 0, sum(density), color="lightgray", alpha=0.8)
-                ax_dos_tot.plot(sum(density), dos_energy, color="gray", lw=1.0)
+                ax_dos_tot.plot(sum(density), dos_energy, color="gray", lw=1.5)
 
                 ax_dos_tot.axvline(0, color="black", linestyle="-", linewidth=plt.gca().spines["bottom"].get_linewidth())
                 ax_dos_tot.set_yticklabels([])
@@ -406,7 +406,6 @@ def plot_tdos(dos_data, figsize=(10, 6), dpi=150, sigma=0.02, ewin=None, fermi_e
 
     # set the grid only vertically
     ax.xaxis.grid(True)
-
     plt.show()
 
 
@@ -416,7 +415,7 @@ def main():
     parser.add_argument("--dos", type=str, help="Path to the CP2K DOS file (project.dos)")
     parser.add_argument("--ewin", type=float, nargs=2, default=None, help="Energy window for plots (eV)")
     parser.add_argument("--figsize", type=float, nargs=2, default=[10, 6], help="Figure size in cm (width, height)")
-    parser.add_argument("--dpi", type=int, default=300, help="Figure resolution (DPI)")
+    parser.add_argument("--dpi", type=int, default=150, help="Figure resolution (DPI)")
     parser.add_argument("--sigma", type=float, default=0.005, help="Gaussian broadening parameter in Hartree")
     parser.add_argument("--fermi", type=float, default=None, help="Fixed Fermi energy (in eV). If not provided, it will be calculated from the band structure.")
 
