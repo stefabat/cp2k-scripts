@@ -201,7 +201,6 @@ def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigm
         E_fermi = get_fermi_energy(band_energies, occupations)
     else:
         E_fermi = fermi_energy
-        print(fermi_energy)
         
     k_distances = calculate_k_distances(k_points)
     # TODO: maybe it's just better to have bands energies in a list, which I can modify
@@ -419,7 +418,7 @@ def main():
     parser.add_argument("--figsize", type=float, nargs=2, default=[10, 6], help="Figure size in cm (width, height)")
     parser.add_argument("--dpi", type=int, default=300, help="Figure resolution (DPI)")
     parser.add_argument("--sigma", type=float, default=0.005, help="Gaussian broadening parameter in Hartree")
-    parser.add_argument("--Fermi", type=float, default=None, help="Fixed Fermi energy (in eV). If not provided, it will be calculated from the band structure.")
+    parser.add_argument("--fermi", type=float, default=None, help="Fixed Fermi energy (in eV). If not provided, it will be calculated from the band structure.")
 
     args = parser.parse_args()
 
@@ -427,9 +426,9 @@ def main():
     dos_data = parse_dos_file(args.dos) if args.dos else None
 
     if bs_data:
-        plot_bands(bs_data, dos_data, args.figsize, args.dpi, args.ewin, args.sigma, fermi_energy=args.Fermi)
+        plot_bands(bs_data, dos_data, args.figsize, args.dpi, args.ewin, args.sigma, fermi_energy=args.fermi)
     elif dos_data:
-        plot_tdos(dos_data, args.figsize, args.dpi, args.sigma, args.ewin, fermi_energy=args.Fermi)
+        plot_tdos(dos_data, args.figsize, args.dpi, args.sigma, args.ewin, fermi_energy=args.fermi)
     else:
         parser.print_help()
 
