@@ -5,9 +5,9 @@ import argparse
 
 def gaussian_broadening(energies, dos, sigma, energy_grid):
     broadened_dos = np.zeros_like(energy_grid)
+    prefactor = 1 / (sigma * np.sqrt(2 * np.pi)) # for normalization
     for e, d in zip(energies, dos):
-        broadened_dos += d * np.exp(-((energy_grid - e) ** 2) / (2 * sigma ** 2))
-    broadened_dos /= (sigma * np.sqrt(2 * np.pi))
+        broadened_dos += d * prefactor * np.exp(-((energy_grid - e) ** 2) / (2 * sigma ** 2))
     return broadened_dos
 
 def plot_pdos(filename_prefix, num_elements):
@@ -19,19 +19,21 @@ def plot_pdos(filename_prefix, num_elements):
     # --- Data Storage ---
     element_names, orbital_choices, orbital_colors = {}, {}, {}
     element_dos, plot_order = {}, []
-    sigma, fermi_energy = 0.1, 0.0
+    sigma = 0.1
+    gridspacing = 1000
+    fermi_energy = 0.0
     total_dos = np.zeros(0)
     fermi_energy_printed = False  # Flag to track if Fermi energy has been printed
 
     # --- Color Palette ---
     available_colors = ['blue', 'green', 'red', 'orange', 'purple', 'cyan',
-                        'magenta', 'brown', 'pink', 'gray']
+                        'magenta', 'brown', 'pink', 'gray', 'yellow']
     color_index = 0
 
     # --- Print Available Colors ---
-    print("Available colors for orbital selection:")
+    print("Available colors for pDOS:")
     print(available_colors)
-    print("\nIf you press Enter without typing a color, the default color will be assigned.")
+    print("If you press Enter without typing a color, the default color will be assigned.")
 
     # --- File Processing ---
     for i, file in element_files.items():
@@ -50,7 +52,7 @@ def plot_pdos(filename_prefix, num_elements):
                 if fermi_match:
                     fermi_energy = float(fermi_match.group(1)) * 27.2114  # Hartree to eV
                     if not fermi_energy_printed:
-                        print(f"Fermi energy from {file}: {fermi_energy:.3f} eV")
+                        print(f"\nFermi energy from {file}: {fermi_energy:.3f} eV")
                         fermi_energy_printed = True
 
                 data = np.loadtxt(lines[2:])
@@ -83,15 +85,15 @@ def plot_pdos(filename_prefix, num_elements):
                     color_index += 0 if color else 1  # Only advance index for default colors
 
                     # Store DOS data
-                    element_dos[key] = gaussian_broadening(e_values, orbitals[orbital], sigma, e_values)
+                    element_dos[key] = orbitals[orbital]
                     plot_order.append(key)
 
                 # Update total DOS
-                raw_total_dos = sum(orbitals.values())  # Sum ALL orbitals
+                raw_total_dos = sum(orbitals.values())  # Sum all orbitals
                 if total_dos.size == 0:
-                    total_dos = gaussian_broadening(e_values, raw_total_dos, sigma, e_values)
+                    total_dos = raw_total_dos  # Direct sum first time
                 else:
-                    total_dos += gaussian_broadening(e_values, raw_total_dos, sigma, e_values)
+                    total_dos += raw_total_dos  # Add subsequent raw sums
 
         except FileNotFoundError:
             print(f"Error: File {file} not found.")
@@ -103,7 +105,7 @@ def plot_pdos(filename_prefix, num_elements):
     # --- Energy Range Setup ---
     x_min = float(input("\nEnter minimum energy (eV): "))
     x_max = float(input("\nEnter maximum energy (eV): "))
-    energy_grid = np.linspace(x_min, x_max, 1000)
+    energy_grid = np.linspace(x_min, x_max, gridspacing)
 
     # --- Final Plotting ---
     plt.figure(figsize=(10, 6))
@@ -111,10 +113,14 @@ def plot_pdos(filename_prefix, num_elements):
     # Plot individual components
     for key in plot_order:
         element, orbital = key.split('_')
+        # Go Gaussian brodening:
         dos = gaussian_broadening(e_values, element_dos[key], sigma, energy_grid)
-        plt.fill_between(energy_grid, dos, alpha=0.6,
-                         label=f"{element} ({orbital})",  # Orbital in parentheses
-                         color=orbital_colors[key])
+        plt.fill_between(energy_grid, dos, alpha=0.6, label=f"{element} ({orbital})",color=orbital_colors[key])
+        # Plot just sticks:
+        #intensities = element_dos[key]
+        #for e, height in zip(e_values, intensities):
+        #    plt.vlines(e, 0, height,colors=orbital_colors[key],alpha=0.8,label=f"{element} ({orbital})" if f"{element} ({orbital})" not in plt.gca().get_legend_handles_labels()[1] else "")
+
 
     # Plot total DOS
     total_dos_smoothed = gaussian_broadening(e_values, total_dos, sigma, energy_grid)
@@ -122,11 +128,11 @@ def plot_pdos(filename_prefix, num_elements):
 
     # Format plot
     plt.axvline(0, color='gray', linestyle='--', alpha=0.7)  # Fermi level indicator
-    plt.xlabel("E - E$_F$ [eV]", fontsize=16)  # eV in square brackets, fontsize 16
-    plt.ylabel("Projected DOS [states/eV]", fontsize=16)  # fontsize 16
+    plt.xlabel("E - E$_F$ [eV]", fontsize=16)  
+    plt.ylabel("Projected DOS", fontsize=16)  # unit is states / eV
     #plt.title(f"Projected DOS for {filename_prefix}", fontsize=16)
     plt.legend(fontsize=10)
-    plt.grid(alpha=0.3)
+    #plt.grid(alpha=0.3)
     plt.xlim(x_min, x_max)
 
     # Set tick label font size
