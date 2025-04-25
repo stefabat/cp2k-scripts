@@ -12,8 +12,6 @@ from scipy.ndimage import gaussian_filter1d
 # Ensure Matplotlib's save dialog opens in the current working directory
 plt.rcParams["savefig.directory"] = os.getcwd()
 
-HARTREE_TO_EV = 27.211384  # Conversion factor from Hartree to eV
-
 
 def parse_bs_file(filename):
     """
@@ -163,10 +161,10 @@ def get_fermi_energy(band_energies, occupations):
     return E_fermi
 
 
-def apply_gaussian_smoothing(energy, density, sigma_hartree):
+# sigma is in eV
+def apply_gaussian_smoothing(energy, density, sigma):
     """ Applies Gaussian smoothing to the DOS data. """
-    sigma_ev = sigma_hartree * HARTREE_TO_EV  # Convert sigma to eV
-    return gaussian_filter1d(density, sigma=sigma_ev / (energy[1] - energy[0]))
+    return gaussian_filter1d(density, sigma=sigma/(energy[1] - energy[0]))
 
 
 # band_energies and occupations are 2D arrays with shape (n_kps, n_bands)
@@ -191,7 +189,7 @@ def calculate_band_gap(band_energies, occupations):
     return band_gap, vbm_k_index, cbm_k_index, np.sum(occ_bands), np.sum(~occ_bands)
 
 
-def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigma=0.005, fermi_energy=None):
+def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigma=0.05, fermi_energy=None):
     """Plots band structure, and optionally adds a DOS plot on the right if dos_data is provided."""
 
     k_points, _, band_energies, occupations, special_points, n_bands, n_spins = bs_data
@@ -201,7 +199,7 @@ def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigm
         E_fermi = get_fermi_energy(band_energies, occupations)
     else:
         E_fermi = fermi_energy
-        
+
     k_distances = calculate_k_distances(k_points)
     # TODO: maybe it's just better to have bands energies in a list, which I can modify
     aligned_energies = tuple(map(lambda x: x - E_fermi, band_energies))
@@ -366,11 +364,11 @@ def plot_bands(bs_data, dos_data=None, figsize=(10, 6), dpi=150, ewin=None, sigm
     plt.show()
 
 # TODO: fix for spin-polarized calculations
-def plot_tdos(dos_data, figsize=(10, 6), dpi=150, sigma=0.02, ewin=None, fermi_energy=None):
+def plot_tdos(dos_data, figsize=(10, 6), dpi=150, sigma=0.05, ewin=None, fermi_energy=None):
     """Plots total DOS separately with energy on the x-axis."""
 
     dos_energy, density, population = dos_data
-    
+
     # Find the largest energy that has population different from zero
     # Determine Fermi energy
     if fermi_energy is None:
@@ -414,9 +412,9 @@ def main():
     parser.add_argument("--bs", type=str, help="Path to the CP2K band structure file (project.bs)")
     parser.add_argument("--dos", type=str, help="Path to the CP2K DOS file (project.dos)")
     parser.add_argument("--ewin", type=float, nargs=2, default=None, help="Energy window for plots (eV)")
-    parser.add_argument("--figsize", type=float, nargs=2, default=[10, 6], help="Figure size in cm (width, height)")
-    parser.add_argument("--dpi", type=int, default=150, help="Figure resolution (DPI)")
-    parser.add_argument("--sigma", type=float, default=0.005, help="Gaussian broadening parameter in Hartree")
+    parser.add_argument("--figsize", type=float, nargs=2, default=[10, 6], help="Figure size in cm (width, height). Default is 10x6 cm.")
+    parser.add_argument("--dpi", type=int, default=150, help="Figure resolution in DPI. Default is 150.")
+    parser.add_argument("--sigma", type=float, default=0.05, help="Gaussian broadening parameter in eV. Default is 0.05.")
     parser.add_argument("--fermi", type=float, default=None, help="Fixed Fermi energy (in eV). If not provided, it will be calculated from the band structure.")
 
     args = parser.parse_args()
