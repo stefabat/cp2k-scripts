@@ -12,6 +12,7 @@ from scipy.ndimage import gaussian_filter1d
 # Ensure Matplotlib's save dialog opens in the current working directory
 plt.rcParams["savefig.directory"] = os.getcwd()
 
+HARTREE_TO_EV = 2.72113838565563E+01  # Conversion factor from Hartree to eV
 
 def parse_bs_file(filename):
     """
