@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import numpy as np
 import matplotlib.pyplot as plt
 import re
@@ -14,7 +16,7 @@ def plot_pdos(filename_prefix, num_elements):
     # --- File Setup ---
     element_files = {}
     for i in range(1, num_elements + 1):
-        element_files[i] = f"{filename_prefix}_k{i}-1.pdos"
+        element_files[i] = f"{filename_prefix}-k{i}-1.pdos"
 
     # --- Data Storage ---
     element_names, orbital_choices, orbital_colors = {}, {}, {}
